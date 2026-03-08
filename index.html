@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Call Randomizer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #0f1117;
+      --surface: #181c27;
+      --border:  #252a38;
+      --accent:  #f59e0b;
+      --text:    #e2e8f0;
+      --muted:   #64748b;
+      --success: #10b981;
+      --danger:  #ef4444;
+      --hl:      #1e2435;
+    }
+
+    body { background: var(--bg); color: var(--text); font-family: 'IBM Plex Mono', monospace; }
+
+    .app { min-height: 100vh; padding: 36px 24px 60px; }
+
+    /* Header */
+    .header { text-align: center; margin-bottom: 36px; }
+    .header h1 { font-family: 'Syne', sans-serif; font-size: 26px; font-weight: 800; color: #fff; letter-spacing: -0.5px; }
+    .header h1 span { color: var(--accent); }
+    .header p { color: var(--muted); font-size: 12px; margin-top: 5px; }
+
+    /* Centered column */
+    .center-col { display: flex; flex-direction: column; align-items: center; }
+
+    /* Upload card */
+    .upload-card {
+      width: 340px; background: var(--surface); border: 1.5px dashed var(--border);
+      border-radius: 16px; padding: 32px 28px; text-align: center;
+      cursor: pointer; transition: all 0.2s; margin-bottom: 28px;
+    }
+    .upload-card:hover, .upload-card.drag { border-color: var(--accent); background: rgba(245,158,11,0.03); }
+    .upload-card .up-icon { font-size: 32px; margin-bottom: 12px; }
+    .upload-card .up-title { font-size: 14px; color: var(--text); }
+    .upload-card .up-title strong { color: var(--accent); }
+    .upload-card .up-sub { font-size: 11px; color: var(--muted); margin-top: 5px; }
+    .upload-card.loaded { border-style: solid; border-color: rgba(16,185,129,0.35); background: rgba(16,185,129,0.04); }
+    .upload-card.loaded .up-icon { font-size: 28px; }
+    .upload-card.loaded .up-title { color: var(--success); font-size: 13px; word-break: break-all; }
+
+    .info-chips { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+    .info-chip { font-size: 11px; background: rgba(100,116,139,0.12); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; color: var(--muted); }
+    .info-chip strong { color: var(--text); }
+    .info-chip.green { background: rgba(16,185,129,0.08); border-color: rgba(16,185,129,0.2); }
+    .info-chip.green strong { color: var(--success); }
+
+    /* AHT Panel */
+    .aht-panel { width: 100%; max-width: 680px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 36px 40px; }
+    .aht-panel-title { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; color: #fff; margin-bottom: 4px; }
+    .aht-panel-sub { font-size: 12px; color: var(--muted); margin-bottom: 28px; }
+
+    .mode-toggle { display: flex; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 4px; gap: 4px; margin-bottom: 24px; }
+    .mode-btn { flex: 1; padding: 10px 14px; border-radius: 7px; font-family: 'IBM Plex Mono', monospace; font-size: 13px; border: none; cursor: pointer; transition: all 0.2s; color: var(--muted); background: transparent; text-align: center; }
+    .mode-btn.active { background: var(--accent); color: #000; font-weight: 600; }
+
+    .field { margin-bottom: 20px; }
+    .field label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 8px; letter-spacing: 1px; text-transform: uppercase; }
+    .field input[type="number"] { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 9px; color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: 15px; padding: 11px 16px; outline: none; transition: border-color 0.2s; }
+    .field input:focus { border-color: var(--accent); }
+
+    .range-header { display: grid; grid-template-columns: 1fr 1fr 1fr 40px; gap: 12px; margin-bottom: 8px; padding: 0 2px; }
+    .range-lbl { font-size: 10px; color: var(--muted); text-align: center; letter-spacing: 1.5px; text-transform: uppercase; }
+    .range-row { display: grid; grid-template-columns: 1fr 1fr 1fr 40px; gap: 12px; align-items: center; margin-bottom: 4px; }
+    .range-row input { background: var(--bg); border: 1px solid var(--border); border-radius: 9px; color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: 15px; padding: 11px 12px; outline: none; transition: border-color 0.2s; width: 100%; text-align: center; }
+    .range-row input:focus { border-color: var(--accent); }
+    .range-row input.filled { border-color: rgba(245,158,11,0.5); background: rgba(245,158,11,0.03); }
+    .range-row input:disabled { opacity: 0.5; cursor: not-allowed; font-size: 12px; }
+
+    .avail-badge { font-size: 10px; text-align: right; padding-right: 52px; margin-bottom: 12px; margin-top: 3px; }
+    .avail-ok { color: var(--success); }
+    .avail-warn { color: var(--danger); }
+
+    .btn-icon { background: transparent; border: 1px solid var(--border); border-radius: 8px; color: var(--muted); cursor: pointer; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; font-size: 13px; flex-shrink: 0; }
+    .btn-icon:hover { border-color: var(--danger); color: var(--danger); background: rgba(239,68,68,0.06); }
+
+    .add-range-btn { width: 100%; padding: 11px; background: transparent; border: 1px dashed var(--border); border-radius: 9px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; font-size: 12px; cursor: pointer; transition: all 0.2s; margin-top: 4px; }
+    .add-range-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    .divider { height: 1px; background: var(--border); margin: 24px 0; }
+
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 13px 22px; border-radius: 10px; font-family: 'IBM Plex Mono', monospace; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.2s; border: none; }
+    .btn-primary { background: #6366f1; color: #fff; width: 100%; justify-content: center; letter-spacing: 0.5px; }
+    .btn-primary:hover:not(:disabled) { background: #818cf8; transform: translateY(-1px); box-shadow: 0 6px 24px rgba(99,102,241,0.4); }
+    .btn-primary:disabled { background: #2d2f5a; color: #4b4d8a; cursor: not-allowed; }
+    .btn-success { background: var(--success); color: #000; }
+    .btn-success:hover { background: #34d399; }
+    .btn-sm { padding: 7px 14px; font-size: 12px; border-radius: 7px; }
+
+    .error-msg { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); border-radius: 8px; padding: 10px 14px; font-size: 12px; color: var(--danger); margin-top: 14px; width: 100%; max-width: 680px; display: none; }
+
+    /* Results */
+    .results-wrapper { width: 100%; margin-top: 32px; display: none; }
+    .stats-bar { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 16px; }
+    .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; flex: 1; min-width: 120px; }
+    .stat .val { font-family: 'Syne', sans-serif; font-size: 30px; font-weight: 800; color: #fff; }
+    .stat .val.accent { color: var(--accent); }
+    .stat .lbl { font-size: 10px; color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase; margin-top: 2px; }
+
+    .results-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+    .results-toolbar { display: flex; justify-content: space-between; align-items: center; padding: 16px 22px; border-bottom: 1px solid var(--border); }
+    .results-title { font-size: 11px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; color: var(--accent); }
+
+    .table-wrap { overflow-x: auto; max-height: 520px; overflow-y: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    thead th { background: var(--hl); padding: 10px 18px; text-align: left; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); position: sticky; top: 0; z-index: 1; white-space: nowrap; }
+    tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+    tbody tr:hover { background: var(--hl); }
+    tbody td { padding: 11px 18px; color: var(--text); white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+    .id-cell { font-size: 10px; color: var(--muted); }
+    .range-tag { display: inline-block; padding: 3px 9px; border-radius: 5px; font-size: 10px; font-weight: 600; background: rgba(245,158,11,0.12); color: var(--accent); border: 1px solid rgba(245,158,11,0.2); }
+
+    /* Page hint */
+    .page-hint { text-align: center; margin-top: 48px; }
+    .page-hint p { font-size: 12px; color: var(--muted); line-height: 2; }
+    .page-hint strong { color: var(--accent); }
+
+    @media (max-width: 720px) { .aht-panel { padding: 24px 20px; } .upload-card { width: 100%; } }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <div class="header">
+    <h1>CALL <span>RANDOMIZER</span></h1>
+    <p>AHT aralıklarına göre rastgele çağrı örnekleme aracı</p>
+  </div>
+
+  <div class="center-col">
+
+    <!-- Upload Card -->
+    <div class="upload-card" id="uploadCard">
+      <div class="up-icon" id="uploadIcon">⬆️</div>
+      <div class="up-title" id="uploadTitle"><strong>Tıkla</strong> veya dosyayı sürükle bırak</div>
+      <div class="up-sub" id="uploadSub">.xlsx · .xls · .csv</div>
+      <div class="info-chips" id="infoChips" style="display:none"></div>
+    </div>
+    <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none" />
+
+    <!-- Error -->
+    <div class="error-msg" id="errorMsg"></div>
+
+    <!-- AHT Panel -->
+    <div class="aht-panel">
+      <div class="aht-panel-title">AHT Aralıkları & Örnekleme</div>
+      <div class="aht-panel-sub">Aralıkları düzenle, adet belirle ve rastgele seç</div>
+
+      <div class="mode-toggle">
+        <button class="mode-btn active" id="btnPer" onclick="setMode('per')">Aralık başına adet</button>
+        <button class="mode-btn" id="btnTotal" onclick="setMode('total')">Toplam adet</button>
+      </div>
+
+      <div class="field" id="totalField" style="display:none">
+        <label>Toplam Çağrı Sayısı</label>
+        <input type="number" id="totalCount" min="1" placeholder="örn: 50" />
+      </div>
+
+      <div class="range-header">
+        <div class="range-lbl">Min (sn)</div>
+        <div class="range-lbl">Max (sn)</div>
+        <div class="range-lbl" id="thirdColLbl">Adet</div>
+        <div></div>
+      </div>
+
+      <div id="rangesContainer"></div>
+
+      <button class="add-range-btn" onclick="addRange()">+ Aralık Ekle</button>
+      <div class="divider"></div>
+      <button class="btn btn-primary" id="runBtn" onclick="runSampling()" disabled>🎲 Rastgele Seç</button>
+    </div>
+
+    <!-- Results -->
+    <div class="results-wrapper" id="resultsWrapper">
+      <div class="stats-bar" id="statsBar"></div>
+      <div class="results-panel">
+        <div class="results-toolbar">
+          <div class="results-title">📋 Seçilen Çağrılar</div>
+          <button class="btn btn-success btn-sm" onclick="downloadExcel()">⬇️ Excel İndir</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th><th>AHT Aralığı</th><th>Çağrı ID</th>
+                <th>Temsilci</th><th>Kuyruk</th><th>Tarih</th><th>Süre (sn)</th>
+              </tr>
+            </thead>
+            <tbody id="resultsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hint -->
+    <div class="page-hint" id="pageHint">
+      <p>Excel dosyasını yükleyip aralıkları ayarladıktan sonra</p>
+      <p><strong>"Rastgele Seç"</strong> butonuna basın</p>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── Constants ────────────────────────────────────────────────────
+const ID_COL   = 'active_call_key';
+const DUR_COL  = 'total_duration';
+const SHOW_COLS = ['active_call_key','agent_name','agent_email','queue_name','call_date','total_duration'];
+
+// ── State ────────────────────────────────────────────────────────
+let allRows  = [];
+let validRows = [];
+let results  = [];
+let mode     = 'per';
+let nextId   = 10;
+let ranges   = [
+  { id:1, min:30,  max:60,  count:'' },
+  { id:2, min:60,  max:90,  count:'' },
+  { id:3, min:90,  max:120, count:'' },
+  { id:4, min:120, max:180, count:'' },
+];
+
+// ── Helpers ──────────────────────────────────────────────────────
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length-1; i > 0; i--) {
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i],a[j]] = [a[j],a[i]];
+  }
+  return a;
+}
+function sample(arr, n) { return shuffle(arr).slice(0, Math.min(n, arr.length)); }
+
+function fmt(val) {
+  if (val === null || val === undefined || val === '') return '—';
+  if (val instanceof Date) return val.toLocaleString('tr-TR');
+  return String(val);
+}
+
+function showError(msg) {
+  const el = document.getElementById('errorMsg');
+  el.textContent = '⚠️ ' + msg;
+  el.style.display = msg ? 'block' : 'none';
+}
+
+function availCount(r) {
+  if (r.min === '' || r.max === '' || Number(r.min) >= Number(r.max)) return null;
+  return validRows.filter(row => {
+    const v = Number(row[DUR_COL]);
+    return v >= Number(r.min) && v < Number(r.max);
+  }).length;
+}
+
+// ── File upload ──────────────────────────────────────────────────
+const uploadCard = document.getElementById('uploadCard');
+const fileInput  = document.getElementById('fileInput');
+
+uploadCard.addEventListener('click', () => fileInput.click());
+uploadCard.addEventListener('dragover', e => { e.preventDefault(); uploadCard.classList.add('drag'); });
+uploadCard.addEventListener('dragleave', () => uploadCard.classList.remove('drag'));
+uploadCard.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadCard.classList.remove('drag');
+  handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
+
+function handleFile(f) {
+  if (!f) return;
+  showError('');
+  hideResults();
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb   = XLSX.read(e.target.result, { type: 'array' });
+      const ws   = wb.Sheets[wb.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      if (!data.length) { showError('Excel dosyası boş.'); return; }
+      const cols = Object.keys(data[0]);
+      if (!cols.includes(ID_COL))  { showError('"' + ID_COL  + '" kolonu bulunamadı.'); return; }
+      if (!cols.includes(DUR_COL)) { showError('"' + DUR_COL + '" kolonu bulunamadı.'); return; }
+      allRows   = data;
+      validRows = data.filter(r => { const v = Number(r[DUR_COL]); return !isNaN(v) && v > 0; });
+      updateUploadCard(f.name);
+      document.getElementById('runBtn').disabled = false;
+      renderRanges();
+    } catch { showError('Dosya okunamadı.'); }
+  };
+  reader.readAsArrayBuffer(f);
+}
+
+function updateUploadCard(name) {
+  uploadCard.classList.add('loaded');
+  document.getElementById('uploadIcon').textContent = '✅';
+  document.getElementById('uploadTitle').textContent = name;
+  document.getElementById('uploadTitle').style.cssText = '';
+  document.getElementById('uploadSub').textContent = 'değiştirmek için tıkla';
+  const chips = document.getElementById('infoChips');
+  chips.style.display = 'flex';
+  chips.innerHTML = `
+    <div class="info-chip">Toplam <strong>${allRows.length}</strong> satır</div>
+    <div class="info-chip green">Geçerli <strong>${validRows.length}</strong> çağrı</div>
+    <div class="info-chip">Süresiz <strong>${allRows.length - validRows.length}</strong></div>
+  `;
+  chips.addEventListener('click', e => e.stopPropagation());
+}
+
+// ── Mode toggle ──────────────────────────────────────────────────
+function setMode(m) {
+  mode = m;
+  document.getElementById('btnPer').classList.toggle('active', m === 'per');
+  document.getElementById('btnTotal').classList.toggle('active', m === 'total');
+  document.getElementById('totalField').style.display = m === 'total' ? 'block' : 'none';
+  document.getElementById('thirdColLbl').textContent = m === 'per' ? 'Adet' : 'Havuz';
+  renderRanges();
+}
+
+// ── Ranges ───────────────────────────────────────────────────────
+function renderRanges() {
+  const container = document.getElementById('rangesContainer');
+  container.innerHTML = '';
+  ranges.forEach(r => {
+    const avail = availCount(r);
+    const over  = mode === 'per' && avail !== null && Number(r.count) > avail;
+
+    const wrap = document.createElement('div');
+
+    const row = document.createElement('div');
+    row.className = 'range-row';
+
+    const minIn = document.createElement('input');
+    minIn.type = 'number'; minIn.value = r.min; minIn.placeholder = '0';
+    minIn.oninput = e => { r.min = e.target.value; renderRanges(); };
+
+    const maxIn = document.createElement('input');
+    maxIn.type = 'number'; maxIn.value = r.max; maxIn.placeholder = '60';
+    maxIn.oninput = e => { r.max = e.target.value; renderRanges(); };
+
+    let thirdIn;
+    if (mode === 'per') {
+      thirdIn = document.createElement('input');
+      thirdIn.type = 'number'; thirdIn.min = '1';
+      thirdIn.value = r.count; thirdIn.placeholder = 'adet';
+      if (r.count) thirdIn.classList.add('filled');
+      if (over) thirdIn.style.borderColor = 'var(--danger)';
+      thirdIn.oninput = e => { r.count = e.target.value; renderRanges(); };
+    } else {
+      thirdIn = document.createElement('input');
+      thirdIn.disabled = true;
+      thirdIn.value = avail !== null ? avail + ' çağrı' : '—';
+    }
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'btn-icon'; delBtn.textContent = '✕';
+    delBtn.onclick = () => { ranges = ranges.filter(x => x.id !== r.id); renderRanges(); };
+
+    row.append(minIn, maxIn, thirdIn, delBtn);
+    wrap.appendChild(row);
+
+    if (mode === 'per' && avail !== null) {
+      const badge = document.createElement('div');
+      badge.className = 'avail-badge ' + (avail === 0 ? 'avail-warn' : 'avail-ok');
+      badge.textContent = avail === 0 ? '⚠ Bu aralıkta çağrı yok' : '✓ Havuzda ' + avail + ' çağrı';
+      wrap.appendChild(badge);
+    }
+
+    container.appendChild(wrap);
+  });
+}
+
+function addRange() {
+  const last = ranges[ranges.length - 1];
+  const newMin = last ? Number(last.max) : 0;
+  ranges.push({ id: nextId++, min: newMin, max: newMin + 30, count: '' });
+  renderRanges();
+}
+
+// ── Sampling ─────────────────────────────────────────────────────
+function runSampling() {
+  showError('');
+  if (!validRows.length) { showError('Önce bir Excel dosyası yükleyin.'); return; }
+  const vr = ranges.filter(r => r.min !== '' && r.max !== '' && Number(r.min) < Number(r.max));
+  if (!vr.length) { showError('En az bir geçerli aralık tanımlayın.'); return; }
+
+  const buckets = vr.map(r => ({
+    ...r,
+    items: validRows.filter(row => {
+      const v = Number(row[DUR_COL]);
+      return v >= Number(r.min) && v < Number(r.max);
+    })
+  }));
+
+  let selected = [];
+  if (mode === 'per') {
+    for (const b of buckets) {
+      const n = Number(b.count);
+      if (!n || n <= 0) continue;
+      sample(b.items, n).forEach(row => selected.push({ ...row, __range: b.min+'-'+b.max+'sn' }));
+    }
+    if (!selected.length) { showError('Aralıklara adet girilmedi veya eşleşen çağrı yok.'); return; }
+  } else {
+    const total = Number(document.getElementById('totalCount').value);
+    if (!total || total <= 0) { showError('Geçerli bir toplam sayı girin.'); return; }
+    const totalAvail = buckets.reduce((s,b) => s + b.items.length, 0);
+    if (!totalAvail) { showError('Aralıklarda çağrı bulunamadı.'); return; }
+    for (const b of buckets) {
+      const quota = Math.round((b.items.length / totalAvail) * total);
+      if (!quota) continue;
+      sample(b.items, quota).forEach(row => selected.push({ ...row, __range: b.min+'-'+b.max+'sn' }));
+    }
+    selected = sample(selected, total);
+    if (!selected.length) { showError('Yeterli çağrı bulunamadı.'); return; }
+  }
+
+  results = selected;
+  renderResults();
+}
+
+function renderResults() {
+  document.getElementById('pageHint').style.display = 'none';
+  const wrapper = document.getElementById('resultsWrapper');
+  wrapper.style.display = 'block';
+
+  const activeRangeCount = ranges.filter(r => r.min !== '' && r.max !== '' && Number(r.min) < Number(r.max)).length;
+  document.getElementById('statsBar').innerHTML = `
+    <div class="stat"><div class="val accent">${results.length}</div><div class="lbl">Seçilen Çağrı</div></div>
+    <div class="stat"><div class="val">${validRows.length}</div><div class="lbl">Geçerli Kayıt</div></div>
+    <div class="stat"><div class="val">${activeRangeCount}</div><div class="lbl">Aktif Aralık</div></div>
+  `;
+
+  const tbody = document.getElementById('resultsBody');
+  tbody.innerHTML = '';
+  results.forEach((row, i) => {
+    const tr = document.createElement('tr');
+    const callDate = row.call_date instanceof Date
+      ? row.call_date.toLocaleString('tr-TR')
+      : fmt(row.call_date);
+    tr.innerHTML = `
+      <td style="color:var(--muted)">${i+1}</td>
+      <td><span class="range-tag">${row.__range}</span></td>
+      <td class="id-cell" title="${fmt(row[ID_COL])}">${fmt(row[ID_COL])}</td>
+      <td>${fmt(row.agent_name)}</td>
+      <td>${fmt(row.queue_name)}</td>
+      <td>${callDate}</td>
+      <td style="color:var(--accent);font-weight:600">${fmt(row[DUR_COL])}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function hideResults() {
+  document.getElementById('resultsWrapper').style.display = 'none';
+  document.getElementById('pageHint').style.display = 'block';
+}
+
+// ── Download ─────────────────────────────────────────────────────
+function downloadExcel() {
+  if (!results.length) return;
+  const out = results.map(({ __range, ...rest }) => {
+    const row = { AHT_Araligi: __range };
+    SHOW_COLS.forEach(col => { row[col] = rest[col] ?? ''; });
+    return row;
+  });
+  const ws = XLSX.utils.json_to_sheet(out);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Secilen_Cagrilar');
+  XLSX.writeFile(wb, 'secim_' + new Date().toISOString().slice(0,10) + '.xlsx');
+}
+
+// ── Init ─────────────────────────────────────────────────────────
+renderRanges();
+</script>
+</body>
+</html>
