@@ -335,26 +335,33 @@ function renderRanges() {
     const over  = mode === 'per' && avail !== null && Number(r.count) > avail;
 
     const wrap = document.createElement('div');
+    wrap.id = 'wrap-' + r.id;
 
     const row = document.createElement('div');
     row.className = 'range-row';
 
     const minIn = document.createElement('input');
-    minIn.type = 'number'; minIn.value = r.min; minIn.placeholder = '0';
-    minIn.oninput = e => { r.min = e.target.value; renderRanges(); };
+    minIn.type = 'number'; minIn.id = 'rmin-' + r.id;
+    minIn.value = r.min; minIn.placeholder = '0';
+    minIn.oninput = e => { r.min = e.target.value; updateBadge(r); };
+    minIn.onblur  = () => renderRanges();
 
     const maxIn = document.createElement('input');
-    maxIn.type = 'number'; maxIn.value = r.max; maxIn.placeholder = '60';
-    maxIn.oninput = e => { r.max = e.target.value; renderRanges(); };
+    maxIn.type = 'number'; maxIn.id = 'rmax-' + r.id;
+    maxIn.value = r.max; maxIn.placeholder = '60';
+    maxIn.oninput = e => { r.max = e.target.value; updateBadge(r); };
+    maxIn.onblur  = () => renderRanges();
 
     let thirdIn;
     if (mode === 'per') {
       thirdIn = document.createElement('input');
       thirdIn.type = 'number'; thirdIn.min = '1';
+      thirdIn.id = 'rcnt-' + r.id;
       thirdIn.value = r.count; thirdIn.placeholder = 'adet';
       if (r.count) thirdIn.classList.add('filled');
       if (over) thirdIn.style.borderColor = 'var(--danger)';
-      thirdIn.oninput = e => { r.count = e.target.value; renderRanges(); };
+      thirdIn.oninput = e => { r.count = e.target.value; updateBadge(r); };
+      thirdIn.onblur  = () => renderRanges();
     } else {
       thirdIn = document.createElement('input');
       thirdIn.disabled = true;
@@ -368,15 +375,32 @@ function renderRanges() {
     row.append(minIn, maxIn, thirdIn, delBtn);
     wrap.appendChild(row);
 
+    const badge = document.createElement('div');
+    badge.id = 'badge-' + r.id;
     if (mode === 'per' && avail !== null) {
-      const badge = document.createElement('div');
       badge.className = 'avail-badge ' + (avail === 0 ? 'avail-warn' : 'avail-ok');
       badge.textContent = avail === 0 ? '⚠ Bu aralıkta çağrı yok' : '✓ Havuzda ' + avail + ' çağrı';
-      wrap.appendChild(badge);
     }
+    wrap.appendChild(badge);
 
     container.appendChild(wrap);
   });
+}
+
+// Sadece badge'i güncelle — input'lara dokunma, focus kaybı yok
+function updateBadge(r) {
+  const badge = document.getElementById('badge-' + r.id);
+  if (!badge || mode !== 'per') return;
+  const avail = availCount(r);
+  const over  = avail !== null && Number(r.count) > avail;
+  const cntEl = document.getElementById('rcnt-' + r.id);
+  if (cntEl) {
+    cntEl.classList.toggle('filled', !!r.count);
+    cntEl.style.borderColor = over ? 'var(--danger)' : '';
+  }
+  if (avail === null) { badge.textContent = ''; badge.className = 'avail-badge'; return; }
+  badge.className = 'avail-badge ' + (avail === 0 ? 'avail-warn' : 'avail-ok');
+  badge.textContent = avail === 0 ? '⚠ Bu aralıkta çağrı yok' : '✓ Havuzda ' + avail + ' çağrı';
 }
 
 function addRange() {
