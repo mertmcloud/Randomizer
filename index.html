@@ -225,10 +225,10 @@ let results  = [];
 let mode     = 'per';
 let nextId   = 10;
 let ranges   = [
-  { id:1, min:30,  max:60,  count:'' },
-  { id:2, min:60,  max:90,  count:'' },
-  { id:3, min:90,  max:120, count:'' },
-  { id:4, min:120, max:180, count:'' },
+  { id:1, min:30,  max:60,  count:'', pct:'' },
+  { id:2, min:60,  max:90,  count:'', pct:'' },
+  { id:3, min:90,  max:120, count:'', pct:'' },
+  { id:4, min:120, max:180, count:'', pct:'' },
 ];
 
 // ── Helpers ──────────────────────────────────────────────────────
@@ -322,7 +322,7 @@ function setMode(m) {
   document.getElementById('btnPer').classList.toggle('active', m === 'per');
   document.getElementById('btnTotal').classList.toggle('active', m === 'total');
   document.getElementById('totalField').style.display = m === 'total' ? 'block' : 'none';
-  document.getElementById('thirdColLbl').textContent = m === 'per' ? 'Adet' : 'Havuz';
+  document.getElementById('thirdColLbl').textContent = m === 'per' ? 'Adet' : '% Oran';
   renderRanges();
 }
 
@@ -364,8 +364,12 @@ function renderRanges() {
       thirdIn.onblur  = () => renderRanges();
     } else {
       thirdIn = document.createElement('input');
-      thirdIn.disabled = true;
-      thirdIn.value = avail !== null ? avail + ' çağrı' : '—';
+      thirdIn.type = 'number'; thirdIn.min = '0'; thirdIn.max = '100';
+      thirdIn.id = 'rpct-' + r.id;
+      thirdIn.value = r.pct; thirdIn.placeholder = '%';
+      if (r.pct) thirdIn.classList.add('filled');
+      thirdIn.oninput = e => { r.pct = e.target.value; updatePctTotal(); };
+      thirdIn.onblur  = () => renderRanges();
     }
 
     const delBtn = document.createElement('button');
@@ -382,9 +386,42 @@ function renderRanges() {
       badge.textContent = avail === 0 ? '⚠ Bu aralıkta çağrı yok' : '✓ Havuzda ' + avail + ' çağrı';
     }
     wrap.appendChild(badge);
-
     container.appendChild(wrap);
   });
+
+  // Toplam % göstergesi
+  let pctRow = document.getElementById('pctTotalRow');
+  if (mode === 'total') {
+    if (!pctRow) {
+      pctRow = document.createElement('div');
+      pctRow.id = 'pctTotalRow';
+      pctRow.style.cssText = 'font-size:11px; text-align:right; padding-right:52px; margin-top:6px; margin-bottom:4px;';
+      container.after(pctRow);
+    }
+    updatePctTotal();
+  } else {
+    if (pctRow) pctRow.remove();
+  }
+}
+
+function updatePctTotal() {
+  const total = ranges.reduce((s, r) => s + (Number(r.pct) || 0), 0);
+  const el = document.getElementById('pctTotalRow');
+  if (!el) return;
+  const diff = Math.round((total - 100) * 10) / 10;
+  if (total === 0) {
+    el.style.color = 'var(--muted)';
+    el.textContent = 'Toplam: — %';
+  } else if (total === 100) {
+    el.style.color = 'var(--success)';
+    el.textContent = '✓ Toplam: 100%';
+  } else if (total < 100) {
+    el.style.color = 'var(--accent)';
+    el.textContent = `Toplam: ${total}% — ${100 - total}% eksik`;
+  } else {
+    el.style.color = 'var(--danger)';
+    el.textContent = `Toplam: ${total}% — ${diff}% fazla`;
+  }
 }
 
 // Sadece badge'i güncelle — input'lara dokunma, focus kaybı yok
@@ -406,7 +443,7 @@ function updateBadge(r) {
 function addRange() {
   const last = ranges[ranges.length - 1];
   const newMin = last ? Number(last.max) : 0;
-  ranges.push({ id: nextId++, min: newMin, max: newMin + 30, count: '' });
+  ranges.push({ id: nextId++, min: newMin, max: newMin + 30, count: '', pct: '' });
   renderRanges();
 }
 
@@ -436,14 +473,34 @@ function runSampling() {
   } else {
     const total = Number(document.getElementById('totalCount').value);
     if (!total || total <= 0) { showError('Geçerli bir toplam sayı girin.'); return; }
-    const totalAvail = buckets.reduce((s,b) => s + b.items.length, 0);
+
+    // Yüzde toplamını kontrol et
+    const pctSum = buckets.reduce((s, b) => s + (Number(b.pct) || 0), 0);
+    const hasPct = buckets.some(b => Number(b.pct) > 0);
+
+    if (hasPct && Math.abs(pctSum - 100) > 0.01) {
+      showError(`Yüzdelerin toplamı 100 olmalı. Şu an: ${pctSum}%`); return;
+    }
+
+    const totalAvail = buckets.reduce((s, b) => s + b.items.length, 0);
     if (!totalAvail) { showError('Aralıklarda çağrı bulunamadı.'); return; }
+
     for (const b of buckets) {
-      const quota = Math.round((b.items.length / totalAvail) * total);
+      let quota;
+      if (hasPct) {
+        // Kullanıcının belirlediği yüzdeye göre
+        quota = Math.round((Number(b.pct) / 100) * total);
+      } else {
+        // Yüzde girilmemişse havuz büyüklüğüne orantılı dağıt
+        quota = Math.round((b.items.length / totalAvail) * total);
+      }
       if (!quota) continue;
+      if (quota > b.items.length) {
+        showError(`"${b.min}-${b.max}sn" aralığında yeterli çağrı yok. İstenen: ${quota}, Mevcut: ${b.items.length}`);
+        return;
+      }
       sample(b.items, quota).forEach(row => selected.push({ ...row, __range: b.min+'-'+b.max+'sn' }));
     }
-    selected = sample(selected, total);
     if (!selected.length) { showError('Yeterli çağrı bulunamadı.'); return; }
   }
 
