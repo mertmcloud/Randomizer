@@ -63,7 +63,7 @@
     .aht-panel-sub { font-size: 12px; color: var(--muted); margin-bottom: 28px; }
 
     .mode-toggle { display: flex; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 4px; gap: 4px; margin-bottom: 24px; }
-    .mode-btn { flex: 1; padding: 10px 14px; border-radius: 7px; font-family: 'IBM Plex Mono', monospace; font-size: 13px; border: none; cursor: pointer; transition: all 0.2s; color: var(--muted); background: transparent; text-align: center; }
+    .mode-btn { flex: 1; padding: 10px 14px; border-radius: 7px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; border: none; cursor: pointer; transition: all 0.2s; color: var(--muted); background: transparent; text-align: center; }
     .mode-btn.active { background: var(--accent); color: #000; font-weight: 600; }
 
     .field { margin-bottom: 20px; }
@@ -127,7 +127,7 @@
     .page-hint p { font-size: 12px; color: var(--muted); line-height: 2; }
     .page-hint strong { color: var(--accent); }
 
-    @media (max-width: 720px) { .aht-panel { padding: 24px 20px; } .upload-card { width: 100%; } }
+    @media (max-width: 720px) { .aht-panel { padding: 24px 20px; } .upload-card { width: 100%; } .mode-btn { font-size: 10px; padding: 8px 6px; } }
   </style>
 </head>
 <body>
@@ -160,23 +160,45 @@
       <div class="mode-toggle">
         <button class="mode-btn active" id="btnPer" onclick="setMode('per')">Aralık başına adet</button>
         <button class="mode-btn" id="btnTotal" onclick="setMode('total')">Toplam adet</button>
+        <button class="mode-btn" id="btnAgent" onclick="setMode('agent')">Temsilci başına adet</button>
       </div>
 
+      <!-- Total count field (for 'total' mode) -->
       <div class="field" id="totalField" style="display:none">
         <label>Toplam Çağrı Sayısı</label>
         <input type="number" id="totalCount" min="1" placeholder="örn: 50" />
       </div>
 
-      <div class="range-header">
-        <div class="range-lbl">Min (sn)</div>
-        <div class="range-lbl">Max (sn)</div>
-        <div class="range-lbl" id="thirdColLbl">Adet</div>
-        <div></div>
+      <!-- Per-range and total mode content -->
+      <div id="perTotalContent">
+        <div class="range-header">
+          <div class="range-lbl">Min (sn)</div>
+          <div class="range-lbl">Max (sn)</div>
+          <div class="range-lbl" id="thirdColLbl">Adet</div>
+          <div></div>
+        </div>
+
+        <div id="rangesContainer"></div>
+
+        <button class="add-range-btn" onclick="addRange()">+ Aralık Ekle</button>
       </div>
 
-      <div id="rangesContainer"></div>
+      <!-- Agent mode content -->
+      <div id="agentContent" style="display:none">
+        <div class="range-header" style="grid-template-columns: 1fr 1fr 1fr 40px;">
+          <div class="range-lbl">Min (sn)</div>
+          <div class="range-lbl">Max (sn)</div>
+          <div class="range-lbl">Kaç Adet</div>
+          <div></div>
+        </div>
 
-      <button class="add-range-btn" onclick="addRange()">+ Aralık Ekle</button>
+        <div id="agentRangesContainer"></div>
+
+        <button class="add-range-btn" onclick="addAgentRange()">+ Satır Ekle</button>
+
+        <div id="agentInfo" style="font-size: 11px; color: var(--muted); margin-top: 12px; text-align: center;"></div>
+      </div>
+
       <div class="divider"></div>
       <button class="btn btn-primary" id="runBtn" onclick="runSampling()" disabled>🎲 Rastgele Seç</button>
     </div>
@@ -229,6 +251,11 @@ let ranges   = [
   { id:2, min:60,  max:90,  count:'', pct:'' },
   { id:3, min:90,  max:120, count:'', pct:'' },
   { id:4, min:120, max:180, count:'', pct:'' },
+];
+
+let agentNextId = 100;
+let agentRanges = [
+  { id:100, min:30, max:60, count:2 }
 ];
 
 // ── Helpers ──────────────────────────────────────────────────────
@@ -295,6 +322,7 @@ function handleFile(f) {
       updateUploadCard(f.name);
       document.getElementById('runBtn').disabled = false;
       renderRanges();
+      renderAgentRanges();
     } catch { showError('Dosya okunamadı.'); }
   };
   reader.readAsArrayBuffer(f);
@@ -321,12 +349,20 @@ function setMode(m) {
   mode = m;
   document.getElementById('btnPer').classList.toggle('active', m === 'per');
   document.getElementById('btnTotal').classList.toggle('active', m === 'total');
+  document.getElementById('btnAgent').classList.toggle('active', m === 'agent');
   document.getElementById('totalField').style.display = m === 'total' ? 'block' : 'none';
+  document.getElementById('perTotalContent').style.display = m === 'agent' ? 'none' : 'block';
+  document.getElementById('agentContent').style.display = m === 'agent' ? 'block' : 'none';
   document.getElementById('thirdColLbl').textContent = m === 'per' ? 'Adet' : '% Oran';
-  renderRanges();
+
+  if (m === 'agent') {
+    renderAgentRanges();
+  } else {
+    renderRanges();
+  }
 }
 
-// ── Ranges ───────────────────────────────────────────────────────
+// ── Ranges (per / total modes) ──────────────────────────────────
 function renderRanges() {
   const container = document.getElementById('rangesContainer');
   container.innerHTML = '';
@@ -447,10 +483,111 @@ function addRange() {
   renderRanges();
 }
 
+// ── Agent Ranges (agent mode) ───────────────────────────────────
+function renderAgentRanges() {
+  const container = document.getElementById('agentRangesContainer');
+  if (!container) return;
+  container.innerHTML = '';
+
+  agentRanges.forEach(r => {
+    const wrap = document.createElement('div');
+    wrap.id = 'awrap-' + r.id;
+
+    const row = document.createElement('div');
+    row.className = 'range-row';
+    row.style.gridTemplateColumns = '1fr 1fr 1fr 40px';
+
+    const minIn = document.createElement('input');
+    minIn.type = 'number'; minIn.value = r.min; minIn.placeholder = '0';
+    minIn.oninput = e => { r.min = e.target.value; updateAgentBadge(r); };
+    minIn.onblur = () => renderAgentRanges();
+
+    const maxIn = document.createElement('input');
+    maxIn.type = 'number'; maxIn.value = r.max; maxIn.placeholder = '60';
+    maxIn.oninput = e => { r.max = e.target.value; updateAgentBadge(r); };
+    maxIn.onblur = () => renderAgentRanges();
+
+    const cntIn = document.createElement('input');
+    cntIn.type = 'number'; cntIn.min = '1'; cntIn.value = r.count; cntIn.placeholder = 'adet';
+    if (r.count) cntIn.classList.add('filled');
+    cntIn.oninput = e => { r.count = e.target.value; };
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'btn-icon'; delBtn.textContent = '✕';
+    delBtn.onclick = () => {
+      agentRanges = agentRanges.filter(x => x.id !== r.id);
+      if (agentRanges.length === 0) addAgentRange();
+      else renderAgentRanges();
+    };
+
+    row.append(minIn, maxIn, cntIn, delBtn);
+    wrap.appendChild(row);
+
+    // Badge
+    const badge = document.createElement('div');
+    badge.id = 'abadge-' + r.id;
+    badge.className = 'avail-badge';
+    updateAgentBadgeEl(badge, r);
+    wrap.appendChild(badge);
+
+    container.appendChild(wrap);
+  });
+
+  updateAgentInfo();
+}
+
+function updateAgentBadgeEl(badge, r) {
+  if (!validRows.length || r.min === '' || r.max === '' || Number(r.min) >= Number(r.max)) {
+    badge.textContent = '';
+    return;
+  }
+  const filtered = validRows.filter(row => {
+    const v = Number(row[DUR_COL]);
+    return v >= Number(r.min) && v < Number(r.max);
+  });
+  const agents = [...new Set(filtered.map(row => String(row.agent_name || '')))].filter(Boolean);
+  if (filtered.length === 0) {
+    badge.className = 'avail-badge avail-warn';
+    badge.textContent = '⚠ Bu aralıkta çağrı yok';
+  } else {
+    badge.className = 'avail-badge avail-ok';
+    badge.textContent = `✓ ${filtered.length} çağrı, ${agents.length} temsilci`;
+  }
+}
+
+function updateAgentBadge(r) {
+  const badge = document.getElementById('abadge-' + r.id);
+  if (badge) updateAgentBadgeEl(badge, r);
+}
+
+function updateAgentInfo() {
+  const infoEl = document.getElementById('agentInfo');
+  if (!infoEl) return;
+  if (!validRows.length) {
+    infoEl.innerHTML = '<span style="color:var(--muted)">Dosya yüklendiğinde temsilci bilgisi görünecek</span>';
+    return;
+  }
+  const agents = [...new Set(validRows.map(row => String(row.agent_name || '')))].filter(Boolean);
+  infoEl.innerHTML = `<span style="color:var(--success)">👤 Dosyada toplam <strong>${agents.length}</strong> farklı temsilci bulundu</span>`;
+}
+
+function addAgentRange() {
+  const last = agentRanges[agentRanges.length - 1];
+  const newMin = last ? Number(last.max) : 0;
+  agentRanges.push({ id: ++agentNextId, min: newMin, max: newMin + 30, count: 2 });
+  renderAgentRanges();
+}
+
 // ── Sampling ─────────────────────────────────────────────────────
 function runSampling() {
   showError('');
   if (!validRows.length) { showError('Önce bir Excel dosyası yükleyin.'); return; }
+
+  if (mode === 'agent') {
+    runAgentSampling();
+    return;
+  }
+
   const vr = ranges.filter(r => r.min !== '' && r.max !== '' && Number(r.min) < Number(r.max));
   if (!vr.length) { showError('En az bir geçerli aralık tanımlayın.'); return; }
 
@@ -474,7 +611,6 @@ function runSampling() {
     const total = Number(document.getElementById('totalCount').value);
     if (!total || total <= 0) { showError('Geçerli bir toplam sayı girin.'); return; }
 
-    // Yüzde toplamını kontrol et
     const pctSum = buckets.reduce((s, b) => s + (Number(b.pct) || 0), 0);
     const hasPct = buckets.some(b => Number(b.pct) > 0);
 
@@ -488,10 +624,8 @@ function runSampling() {
     for (const b of buckets) {
       let quota;
       if (hasPct) {
-        // Kullanıcının belirlediği yüzdeye göre
         quota = Math.round((Number(b.pct) / 100) * total);
       } else {
-        // Yüzde girilmemişse havuz büyüklüğüne orantılı dağıt
         quota = Math.round((b.items.length / totalAvail) * total);
       }
       if (!quota) continue;
@@ -508,17 +642,81 @@ function runSampling() {
   renderResults();
 }
 
+function runAgentSampling() {
+  const vr = agentRanges.filter(r => r.min !== '' && r.max !== '' && Number(r.min) < Number(r.max) && Number(r.count) > 0);
+  if (!vr.length) { showError('En az bir geçerli satır tanımlayın (Min < Max ve Adet > 0).'); return; }
+
+  let selected = [];
+  let warnings = [];
+
+  for (const r of vr) {
+    const minV = Number(r.min);
+    const maxV = Number(r.max);
+    const need = Number(r.count);
+    const rangeLabel = minV + '-' + maxV + 'sn';
+
+    // Filter rows in this duration range
+    const filtered = validRows.filter(row => {
+      const v = Number(row[DUR_COL]);
+      return v >= minV && v < maxV;
+    });
+
+    // Group by agent
+    const agentMap = {};
+    filtered.forEach(row => {
+      const agent = String(row.agent_name || '').trim();
+      if (!agent) return;
+      if (!agentMap[agent]) agentMap[agent] = [];
+      agentMap[agent].push(row);
+    });
+
+    const agents = Object.keys(agentMap);
+    if (!agents.length) {
+      showError(`"${rangeLabel}" aralığında temsilci bulunamadı.`);
+      return;
+    }
+
+    for (const agent of agents) {
+      const pool = agentMap[agent];
+      const picked = sample(pool, need);
+      picked.forEach(row => selected.push({ ...row, __range: rangeLabel }));
+      if (picked.length < need) {
+        warnings.push(`${agent} (${picked.length}/${need} — ${rangeLabel})`);
+      }
+    }
+  }
+
+  if (!selected.length) { showError('Eşleşen çağrı bulunamadı.'); return; }
+
+  if (warnings.length) {
+    showError(`Bazı temsilcilerin yeterli çağrısı yok: ${warnings.join(', ')}`);
+  }
+
+  results = selected;
+  renderResults();
+}
+
 function renderResults() {
   document.getElementById('pageHint').style.display = 'none';
   const wrapper = document.getElementById('resultsWrapper');
   wrapper.style.display = 'block';
 
-  const activeRangeCount = ranges.filter(r => r.min !== '' && r.max !== '' && Number(r.min) < Number(r.max)).length;
-  document.getElementById('statsBar').innerHTML = `
-    <div class="stat"><div class="val accent">${results.length}</div><div class="lbl">Seçilen Çağrı</div></div>
-    <div class="stat"><div class="val">${validRows.length}</div><div class="lbl">Geçerli Kayıt</div></div>
-    <div class="stat"><div class="val">${activeRangeCount}</div><div class="lbl">Aktif Aralık</div></div>
-  `;
+  if (mode === 'agent') {
+    const agents = [...new Set(results.map(r => String(r.agent_name || '')))];
+    const activeRangeCount = agentRanges.filter(r => r.min !== '' && r.max !== '' && Number(r.min) < Number(r.max)).length;
+    document.getElementById('statsBar').innerHTML = `
+      <div class="stat"><div class="val accent">${results.length}</div><div class="lbl">Seçilen Çağrı</div></div>
+      <div class="stat"><div class="val">${agents.length}</div><div class="lbl">Temsilci Sayısı</div></div>
+      <div class="stat"><div class="val">${activeRangeCount}</div><div class="lbl">Aktif Aralık</div></div>
+    `;
+  } else {
+    const activeRangeCount = ranges.filter(r => r.min !== '' && r.max !== '' && Number(r.min) < Number(r.max)).length;
+    document.getElementById('statsBar').innerHTML = `
+      <div class="stat"><div class="val accent">${results.length}</div><div class="lbl">Seçilen Çağrı</div></div>
+      <div class="stat"><div class="val">${validRows.length}</div><div class="lbl">Geçerli Kayıt</div></div>
+      <div class="stat"><div class="val">${activeRangeCount}</div><div class="lbl">Aktif Aralık</div></div>
+    `;
+  }
 
   const tbody = document.getElementById('resultsBody');
   tbody.innerHTML = '';
