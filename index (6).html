@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Call Randomizer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #0f1117;
+      --surface: #181c27;
+      --border:  #252a38;
+      --accent:  #f59e0b;
+      --text:    #e2e8f0;
+      --muted:   #64748b;
+      --success: #10b981;
+      --danger:  #ef4444;
+      --hl:      #1e2435;
+    }
+
+    body { background: var(--bg); color: var(--text); font-family: 'IBM Plex Mono', monospace; }
+
+    .app { min-height: 100vh; padding: 36px 24px 60px; }
+
+    /* Header */
+    .header { text-align: center; margin-bottom: 36px; }
+    .header h1 { font-family: 'Syne', sans-serif; font-size: 26px; font-weight: 800; color: #fff; letter-spacing: -0.5px; }
+    .header h1 span { color: var(--accent); }
+    .header p { color: var(--muted); font-size: 12px; margin-top: 5px; }
+
+    /* Centered column */
+    .center-col { display: flex; flex-direction: column; align-items: center; }
+
+    /* Upload card */
+    .upload-card {
+      width: 340px; background: var(--surface); border: 1.5px dashed var(--border);
+      border-radius: 16px; padding: 32px 28px; text-align: center;
+      cursor: pointer; transition: all 0.2s; margin-bottom: 28px;
+    }
+    .upload-card:hover, .upload-card.drag { border-color: var(--accent); background: rgba(245,158,11,0.03); }
+    .upload-card .up-icon { font-size: 32px; margin-bottom: 12px; }
+    .upload-card .up-title { font-size: 14px; color: var(--text); }
+    .upload-card .up-title strong { color: var(--accent); }
+    .upload-card .up-sub { font-size: 11px; color: var(--muted); margin-top: 5px; }
+    .upload-card.loaded { border-style: solid; border-color: rgba(16,185,129,0.35); background: rgba(16,185,129,0.04); }
+    .upload-card.loaded .up-icon { font-size: 28px; }
+    .upload-card.loaded .up-title { color: var(--success); font-size: 13px; word-break: break-all; }
+
+    .info-chips { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+    .info-chip { font-size: 11px; background: rgba(100,116,139,0.12); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; color: var(--muted); }
+    .info-chip strong { color: var(--text); }
+    .info-chip.green { background: rgba(16,185,129,0.08); border-color: rgba(16,185,129,0.2); }
+    .info-chip.green strong { color: var(--success); }
+
+    /* Column Mapping Panel */
+    .mapping-panel {
+      width: 100%; max-width: 680px; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 28px 32px; margin-bottom: 28px; display: none;
+    }
+    .mapping-panel-title {
+      font-family: 'Syne', sans-serif; font-size: 17px; font-weight: 800; color: #fff; margin-bottom: 4px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .mapping-panel-title .icon { font-size: 20px; }
+    .mapping-panel-sub { font-size: 11px; color: var(--muted); margin-bottom: 20px; }
+
+    .mapping-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+    }
+    @media (max-width: 560px) {
+      .mapping-grid { grid-template-columns: 1fr; }
+    }
+
+    .mapping-field { }
+    .mapping-field label {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 11px; color: var(--muted); margin-bottom: 6px;
+      letter-spacing: 0.8px; text-transform: uppercase;
+    }
+    .mapping-field label .req { color: var(--danger); font-weight: 700; font-size: 13px; }
+    .mapping-field label .opt { color: var(--muted); font-size: 9px; font-weight: 400; letter-spacing: 0; text-transform: none; }
+
+    .mapping-field select {
+      width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 9px;
+      color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: 12px;
+      padding: 10px 14px; outline: none; transition: border-color 0.2s;
+      cursor: pointer; appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748b' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 12px center;
+    }
+    .mapping-field select:focus { border-color: var(--accent); }
+    .mapping-field select.mapped { border-color: rgba(16,185,129,0.4); background-color: rgba(16,185,129,0.03); }
+    .mapping-field select option { background: var(--bg); color: var(--text); }
+
+    .mapping-status {
+      margin-top: 16px; padding: 10px 14px; border-radius: 8px; font-size: 11px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .mapping-status.ok { background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.2); color: var(--success); }
+    .mapping-status.warn { background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.2); color: var(--accent); }
+
+    .mapping-btn-row { display: flex; gap: 10px; margin-top: 18px; }
+    .btn-confirm-map {
+      flex: 1; padding: 11px 18px; border-radius: 9px; font-family: 'IBM Plex Mono', monospace;
+      font-size: 13px; font-weight: 600; border: none; cursor: pointer; transition: all 0.2s;
+      background: var(--success); color: #000; letter-spacing: 0.3px;
+    }
+    .btn-confirm-map:hover:not(:disabled) { background: #34d399; transform: translateY(-1px); }
+    .btn-confirm-map:disabled { background: #1a3a2e; color: #2d6b54; cursor: not-allowed; }
+
+    .auto-badge {
+      display: inline-block; font-size: 9px; background: rgba(99,102,241,0.15); color: #818cf8;
+      border: 1px solid rgba(99,102,241,0.25); border-radius: 4px; padding: 2px 6px;
+      margin-left: 6px; letter-spacing: 0; text-transform: none; font-weight: 500;
+    }
+
+    /* AHT Panel */
+    .aht-panel { width: 100%; max-width: 680px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 36px 40px; }
+    .aht-panel-title { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; color: #fff; margin-bottom: 4px; }
+    .aht-panel-sub { font-size: 12px; color: var(--muted); margin-bottom: 28px; }
+
+    .mode-toggle { display: flex; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 4px; gap: 4px; margin-bottom: 24px; }
+    .mode-btn { flex: 1; padding: 10px 14px; border-radius: 7px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; border: none; cursor: pointer; transition: all 0.2s; color: var(--muted); background: transparent; text-align: center; }
+    .mode-btn.active { background: var(--accent); color: #000; font-weight: 600; }
+
+    .field { margin-bottom: 20px; }
+    .field label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 8px; letter-spacing: 1px; text-transform: uppercase; }
+    .field input[type="number"] { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 9px; color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: 15px; padding: 11px 16px; outline: none; transition: border-color 0.2s; }
+    .field input:focus { border-color: var(--accent); }
+
+    .range-header { display: grid; grid-template-columns: 1fr 1fr 1fr 40px; gap: 12px; margin-bottom: 8px; padding: 0 2px; }
+    .range-lbl { font-size: 10px; color: var(--muted); text-align: center; letter-spacing: 1.5px; text-transform: uppercase; }
+    .range-row { display: grid; grid-template-columns: 1fr 1fr 1fr 40px; gap: 12px; align-items: center; margin-bottom: 4px; }
+    .range-row input { background: var(--bg); border: 1px solid var(--border); border-radius: 9px; color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: 15px; padding: 11px 12px; outline: none; transition: border-color 0.2s; width: 100%; text-align: center; }
+    .range-row input:focus { border-color: var(--accent); }
+    .range-row input.filled { border-color: rgba(245,158,11,0.5); background: rgba(245,158,11,0.03); }
+    .range-row input:disabled { opacity: 0.5; cursor: not-allowed; font-size: 12px; }
+
+    .avail-badge { font-size: 10px; text-align: right; padding-right: 52px; margin-bottom: 12px; margin-top: 3px; }
+    .avail-ok { color: var(--success); }
+    .avail-warn { color: var(--danger); }
+
+    .btn-icon { background: transparent; border: 1px solid var(--border); border-radius: 8px; color: var(--muted); cursor: pointer; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; font-size: 13px; flex-shrink: 0; }
+    .btn-icon:hover { border-color: var(--danger); color: var(--danger); background: rgba(239,68,68,0.06); }
+
+    .add-range-btn { width: 100%; padding: 11px; background: transparent; border: 1px dashed var(--border); border-radius: 9px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; font-size: 12px; cursor: pointer; transition: all 0.2s; margin-top: 4px; }
+    .add-range-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    .divider { height: 1px; background: var(--border); margin: 24px 0; }
+
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 13px 22px; border-radius: 10px; font-family: 'IBM Plex Mono', monospace; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.2s; border: none; }
+    .btn-primary { background: #6366f1; color: #fff; width: 100%; justify-content: center; letter-spacing: 0.5px; }
+    .btn-primary:hover:not(:disabled) { background: #818cf8; transform: translateY(-1px); box-shadow: 0 6px 24px rgba(99,102,241,0.4); }
+    .btn-primary:disabled { background: #2d2f5a; color: #4b4d8a; cursor: not-allowed; }
+    .btn-success { background: var(--success); color: #000; }
+    .btn-success:hover { background: #34d399; }
+    .btn-sm { padding: 7px 14px; font-size: 12px; border-radius: 7px; }
+
+    .error-msg { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); border-radius: 8px; padding: 10px 14px; font-size: 12px; color: var(--danger); margin-top: 14px; width: 100%; max-width: 680px; display: none; }
+
+    /* Results */
+    .results-wrapper { width: 100%; margin-top: 32px; display: none; }
+    .stats-bar { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 16px; }
+    .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; flex: 1; min-width: 120px; }
+    .stat .val { font-family: 'Syne', sans-serif; font-size: 30px; font-weight: 800; color: #fff; }
+    .stat .val.accent { color: var(--accent); }
+    .stat .lbl { font-size: 10px; color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase; margin-top: 2px; }
+
+    .results-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+    .results-toolbar { display: flex; justify-content: space-between; align-items: center; padding: 16px 22px; border-bottom: 1px solid var(--border); }
+    .results-title { font-size: 11px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; color: var(--accent); }
+
+    .table-wrap { overflow-x: auto; max-height: 520px; overflow-y: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    thead th { background: var(--hl); padding: 10px 18px; text-align: left; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); position: sticky; top: 0; z-index: 1; white-space: nowrap; }
+    tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+    tbody tr:hover { background: var(--hl); }
+    tbody td { padding: 11px 18px; color: var(--text); white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+    .id-cell { font-size: 10px; color: var(--muted); }
+    .range-tag { display: inline-block; padding: 3px 9px; border-radius: 5px; font-size: 10px; font-weight: 600; background: rgba(245,158,11,0.12); color: var(--accent); border: 1px solid rgba(245,158,11,0.2); }
+
+    /* Page hint */
+    .page-hint { text-align: center; margin-top: 48px; }
+    .page-hint p { font-size: 12px; color: var(--muted); line-height: 2; }
+    .page-hint strong { color: var(--accent); }
+
+    @media (max-width: 720px) {
+      .aht-panel { padding: 24px 20px; }
+      .upload-card { width: 100%; }
+      .mode-btn { font-size: 10px; padding: 8px 6px; }
+      .mapping-panel { padding: 20px 18px; }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <div class="header">
+    <h1>CALL <span>RANDOMIZER</span></h1>
+    <p>AHT aralıklarına göre rastgele çağrı örnekleme aracı</p>
+  </div>
+
+  <div class="center-col">
+
+    <!-- Upload Card -->
+    <div class="upload-card" id="uploadCard">
+      <div class="up-icon" id="uploadIcon">⬆️</div>
+      <div class="up-title" id="uploadTitle"><strong>Tıkla</strong> veya dosyayı sürükle bırak</div>
+      <div class="up-sub" id="uploadSub">.xlsx · .xls · .csv</div>
+      <div class="info-chips" id="infoChips" style="display:none"></div>
+    </div>
+    <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none" />
+
+    <!-- Column Mapping Panel -->
+    <div class="mapping-panel" id="mappingPanel">
+      <div class="mapping-panel-title">
+        <span class="icon">🔗</span> Kolon Eşleştirme
+      </div>
+      <div class="mapping-panel-sub">Excel'deki kolonları aşağıdaki alanlarla eşleştirin. Zorunlu alanlar (*) işaretlidir.</div>
+
+      <div class="mapping-grid" id="mappingGrid"></div>
+
+      <div id="mappingStatus"></div>
+
+      <div class="mapping-btn-row">
+        <button class="btn-confirm-map" id="btnConfirmMap" onclick="confirmMapping()" disabled>✓ Eşleştirmeyi Onayla</button>
+      </div>
+    </div>
+
+    <!-- Error -->
+    <div class="error-msg" id="errorMsg"></div>
+
+    <!-- AHT Panel -->
+    <div class="aht-panel" id="ahtPanel" style="display:none">
+      <div class="aht-panel-title">AHT Aralıkları & Örnekleme</div>
+      <div class="aht-panel-sub">Aralıkları düzenle, adet belirle ve rastgele seç</div>
+
+      <div class="mode-toggle">
+        <button class="mode-btn active" id="btnPer" onclick="setMode('per')">Aralık başına adet</button>
+        <button class="mode-btn" id="btnTotal" onclick="setMode('total')">Toplam adet</button>
+        <button class="mode-btn" id="btnAgent" onclick="setMode('agent')">Temsilci başına adet</button>
+      </div>
+
+      <!-- Total count field (for 'total' mode) -->
+      <div class="field" id="totalField" style="display:none">
+        <label>Toplam Çağrı Sayısı</label>
+        <input type="number" id="totalCount" min="1" placeholder="örn: 50" />
+      </div>
+
+      <!-- Per-range and total mode content -->
+      <div id="perTotalContent">
+        <div class="range-header">
+          <div class="range-lbl">Min (sn)</div>
+          <div class="range-lbl">Max (sn)</div>
+          <div class="range-lbl" id="thirdColLbl">Adet</div>
+          <div></div>
+        </div>
+
+        <div id="rangesContainer"></div>
+
+        <button class="add-range-btn" onclick="addRange()">+ Aralık Ekle</button>
+      </div>
+
+      <!-- Agent mode content -->
+      <div id="agentContent" style="display:none">
+        <div class="range-header" style="grid-template-columns: 1fr 1fr 1fr 40px;">
+          <div class="range-lbl">Min (sn)</div>
+          <div class="range-lbl">Max (sn)</div>
+          <div class="range-lbl">Kaç Adet</div>
+          <div></div>
+        </div>
+
+        <div id="agentRangesContainer"></div>
+
+        <button class="add-range-btn" onclick="addAgentRange()">+ Satır Ekle</button>
+
+        <div id="agentInfo" style="font-size: 11px; color: var(--muted); margin-top: 12px; text-align: center;"></div>
+      </div>
+
+      <div class="divider"></div>
+      <button class="btn btn-primary" id="runBtn" onclick="runSampling()" disabled>🎲 Rastgele Seç</button>
+    </div>
+
+    <!-- Results -->
+    <div class="results-wrapper" id="resultsWrapper">
+      <div class="stats-bar" id="statsBar"></div>
+      <div class="results-panel">
+        <div class="results-toolbar">
+          <div class="results-title">📋 Seçilen Çağrılar</div>
+          <button class="btn btn-success btn-sm" onclick="downloadExcel()">⬇️ Excel İndir</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr id="resultsHead">
+                <th>#</th><th>AHT Aralığı</th><th>Çağrı ID</th>
+                <th>Temsilci</th><th>Kuyruk</th><th>Tarih</th><th>Süre (sn)</th>
+              </tr>
+            </thead>
+            <tbody id="resultsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hint -->
+    <div class="page-hint" id="pageHint">
+      <p>Excel dosyasını yükleyip aralıkları ayarladıktan sonra</p>
+      <p><strong>"Rastgele Seç"</strong> butonuna basın</p>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── Column Mapping Configuration ────────────────────────────────
+// Each field: { key, label, required, aliases (for auto-detect) }
+const FIELD_DEFS = [
+  {
+    key: 'call_id',
+    label: 'Çağrı ID',
+    required: true,
+    aliases: ['active_call_key','call_key','call_id','callid','cagri_id','çağrı_id','interaction_id','contact_id','session_id','record_id','id','key','uuid']
+  },
+  {
+    key: 'duration',
+    label: 'Süre (AHT)',
+    required: true,
+    aliases: ['total_duration','duration','aht','sure','süre','talk_time','call_duration','handle_time','cagri_suresi','çağrı_süresi','toplam_sure','toplam_süre','total_time','handling_time','avg_handle_time','konusma_suresi','konuşma_süresi']
+  },
+  {
+    key: 'agent_name',
+    label: 'Temsilci Adı',
+    required: true,
+    aliases: ['agent_name','agent','temsilci','temsilci_adi','temsilci_adı','agent_ad','representative','rep_name','operator','danışman','danısman','csr_name','advisor','müşteri_temsilcisi','musteri_temsilcisi']
+  },
+  {
+    key: 'queue_name',
+    label: 'Kuyruk',
+    required: false,
+    aliases: ['queue_name','queue','kuyruk','skill','skill_name','grup','group','department','departman','hat','line','campaign','kampanya']
+  },
+  {
+    key: 'call_date',
+    label: 'Tarih',
+    required: false,
+    aliases: ['call_date','date','tarih','cagri_tarihi','çağrı_tarihi','timestamp','datetime','created_at','start_time','baslangic','başlangıç','call_start','start_date']
+  },
+  {
+    key: 'agent_email',
+    label: 'Temsilci Email',
+    required: false,
+    aliases: ['agent_email','email','e-posta','eposta','mail','agent_mail','temsilci_email','temsilci_mail']
+  }
+];
+
+// ── State ────────────────────────────────────────────────────────
+let rawData    = [];        // raw parsed rows from Excel
+let excelCols  = [];        // column headers from Excel
+let colMap     = {};        // mapping: field key -> excel column name
+let allRows    = [];        // processed rows with normalized keys
+let validRows  = [];
+let results    = [];
+let mode       = 'per';
+let mappingConfirmed = false;
+let nextId     = 10;
+let ranges     = [
+  { id:1, min:30,  max:60,  count:'', pct:'' },
+  { id:2, min:60,  max:90,  count:'', pct:'' },
+  { id:3, min:90,  max:120, count:'', pct:'' },
+  { id:4, min:120, max:180, count:'', pct:'' },
+];
+
+let agentNextId = 100;
+let agentRanges = [
+  { id:100, min:30, max:60, count:2 }
+];
+
+// ── Helpers ──────────────────────────────────────────────────────
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length-1; i > 0; i--) {
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i],a[j]] = [a[j],a[i]];
+  }
+  return a;
+}
+function sample(arr, n) { return shuffle(arr).slice(0, Math.min(n, arr.length)); }
+
+function fmt(val) {
+  if (val === null || val === undefined || val === '') return '—';
+  if (val instanceof Date) return val.toLocaleString('tr-TR');
+  return String(val);
+}
+
+function showError(msg) {
+  const el = document.getElementById('errorMsg');
+  el.textContent = '⚠️ ' + msg;
+  el.style.display = msg ? 'block' : 'none';
+}
+
+function availCount(r) {
+  if (r.min === '' || r.max === '' || Number(r.min) >= Number(r.max)) return null;
+  return validRows.filter(row => {
+    const v = Number(row.__dur);
+    return v >= Number(r.min) && v < Number(r.max);
+  }).length;
+}
+
+// ── Auto-detect column mapping ──────────────────────────────────
+function normalize(str) {
+  return String(str).toLowerCase().trim()
+    .replace(/[\s\-\.]+/g, '_')
+    .replace(/[çÇ]/g, 'c').replace(/[şŞ]/g, 's').replace(/[ğĞ]/g, 'g')
+    .replace(/[üÜ]/g, 'u').replace(/[öÖ]/g, 'o').replace(/[ıİ]/g, 'i');
+}
+
+function autoDetectMapping(cols) {
+  const map = {};
+  const used = new Set();
+
+  for (const field of FIELD_DEFS) {
+    let bestCol = null;
+    let bestScore = 0;
+
+    for (const col of cols) {
+      if (used.has(col)) continue;
+      const norm = normalize(col);
+
+      // Exact match with alias
+      for (const alias of field.aliases) {
+        if (norm === alias) {
+          bestCol = col;
+          bestScore = 100;
+          break;
+        }
+      }
+      if (bestScore === 100) break;
+
+      // Partial match: alias contained in column name or vice versa
+      for (const alias of field.aliases) {
+        if (norm.includes(alias) || alias.includes(norm)) {
+          const score = 50 + (alias.length / norm.length) * 30;
+          if (score > bestScore) { bestScore = score; bestCol = col; }
+        }
+      }
+    }
+
+    if (bestCol && bestScore >= 40) {
+      map[field.key] = bestCol;
+      used.add(bestCol);
+    }
+  }
+
+  return map;
+}
+
+// ── Render Mapping Panel ────────────────────────────────────────
+function renderMappingPanel() {
+  const grid = document.getElementById('mappingGrid');
+  grid.innerHTML = '';
+
+  const autoMap = autoDetectMapping(excelCols);
+
+  for (const field of FIELD_DEFS) {
+    const div = document.createElement('div');
+    div.className = 'mapping-field';
+
+    const label = document.createElement('label');
+    label.innerHTML = field.label;
+    if (field.required) {
+      label.innerHTML += ' <span class="req">*</span>';
+    } else {
+      label.innerHTML += ' <span class="opt">(opsiyonel)</span>';
+    }
+
+    // Show auto-detect badge
+    const autoVal = autoMap[field.key];
+    if (autoVal) {
+      label.innerHTML += '<span class="auto-badge">otomatik</span>';
+    }
+
+    const select = document.createElement('select');
+    select.id = 'map-' + field.key;
+    select.onchange = () => updateMappingStatus();
+
+    const emptyOpt = document.createElement('option');
+    emptyOpt.value = '';
+    emptyOpt.textContent = field.required ? '— Kolon seçin —' : '— Boş bırak —';
+    select.appendChild(emptyOpt);
+
+    for (const col of excelCols) {
+      const opt = document.createElement('option');
+      opt.value = col;
+      opt.textContent = col;
+      if (autoVal === col) opt.selected = true;
+      select.appendChild(opt);
+    }
+
+    if (autoVal) select.classList.add('mapped');
+
+    div.appendChild(label);
+    div.appendChild(select);
+    grid.appendChild(div);
+  }
+
+  document.getElementById('mappingPanel').style.display = 'block';
+  updateMappingStatus();
+}
+
+function updateMappingStatus() {
+  const statusEl = document.getElementById('mappingStatus');
+  const btn = document.getElementById('btnConfirmMap');
+  let allReqMet = true;
+  let mappedCount = 0;
+
+  for (const field of FIELD_DEFS) {
+    const sel = document.getElementById('map-' + field.key);
+    const val = sel ? sel.value : '';
+    sel.classList.toggle('mapped', !!val);
+
+    if (val) mappedCount++;
+    if (field.required && !val) allReqMet = false;
+  }
+
+  if (allReqMet) {
+    statusEl.innerHTML = `<div class="mapping-status ok">✓ Zorunlu alanlar eşleştirildi (${mappedCount}/${FIELD_DEFS.length} alan)</div>`;
+    btn.disabled = false;
+  } else {
+    const missing = FIELD_DEFS.filter(f => f.required && !document.getElementById('map-' + f.key)?.value).map(f => f.label);
+    statusEl.innerHTML = `<div class="mapping-status warn">⚠ Eksik zorunlu alanlar: ${missing.join(', ')}</div>`;
+    btn.disabled = true;
+  }
+}
+
+function confirmMapping() {
+  // Build colMap from selects
+  colMap = {};
+  for (const field of FIELD_DEFS) {
+    const sel = document.getElementById('map-' + field.key);
+    if (sel && sel.value) {
+      colMap[field.key] = sel.value;
+    }
+  }
+
+  // Process raw data into normalized rows
+  allRows = rawData.map(raw => {
+    const row = { __raw: raw };
+    // Copy ALL original columns
+    for (const col of excelCols) {
+      row[col] = raw[col];
+    }
+    // Add normalized keys
+    row.__id    = raw[colMap.call_id] ?? '';
+    row.__dur   = raw[colMap.duration] ?? '';
+    row.__agent = colMap.agent_name ? String(raw[colMap.agent_name] || '').trim() : '';
+    row.__queue = colMap.queue_name ? String(raw[colMap.queue_name] || '') : '';
+    row.__date  = colMap.call_date ? raw[colMap.call_date] : '';
+    row.__email = colMap.agent_email ? String(raw[colMap.agent_email] || '') : '';
+    return row;
+  });
+
+  validRows = allRows.filter(r => { const v = Number(r.__dur); return !isNaN(v) && v > 0; });
+
+  mappingConfirmed = true;
+
+  // Update upload card chips
+  const chips = document.getElementById('infoChips');
+  chips.innerHTML = `
+    <div class="info-chip">Toplam <strong>${allRows.length}</strong> satır</div>
+    <div class="info-chip green">Geçerli <strong>${validRows.length}</strong> çağrı</div>
+    <div class="info-chip">Süresiz <strong>${allRows.length - validRows.length}</strong></div>
+  `;
+
+  // Update results table headers based on mapping
+  updateResultsHeaders();
+
+  // Show AHT panel
+  document.getElementById('ahtPanel').style.display = 'block';
+  document.getElementById('runBtn').disabled = false;
+
+  // Collapse mapping panel visually
+  const panel = document.getElementById('mappingPanel');
+  panel.style.borderColor = 'rgba(16,185,129,0.3)';
+  panel.style.background = 'rgba(16,185,129,0.02)';
+
+  // Render ranges
+  renderRanges();
+  renderAgentRanges();
+
+  // Smooth scroll to AHT panel
+  document.getElementById('ahtPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function updateResultsHeaders() {
+  const tr = document.getElementById('resultsHead');
+  let html = '<th>#</th><th>AHT Aralığı</th>';
+  html += `<th>${colMap.call_id ? colMap.call_id : 'Çağrı ID'}</th>`;
+  html += `<th>${colMap.agent_name ? colMap.agent_name : 'Temsilci'}</th>`;
+  if (colMap.queue_name) html += `<th>${colMap.queue_name}</th>`;
+  if (colMap.call_date)  html += `<th>${colMap.call_date}</th>`;
+  html += `<th>Süre (sn)</th>`;
+  tr.innerHTML = html;
+}
+
+// ── File upload ──────────────────────────────────────────────────
+const uploadCard = document.getElementById('uploadCard');
+const fileInput  = document.getElementById('fileInput');
+
+uploadCard.addEventListener('click', () => fileInput.click());
+uploadCard.addEventListener('dragover', e => { e.preventDefault(); uploadCard.classList.add('drag'); });
+uploadCard.addEventListener('dragleave', () => uploadCard.classList.remove('drag'));
+uploadCard.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadCard.classList.remove('drag');
+  handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
+
+function handleFile(f) {
+  if (!f) return;
+  showError('');
+  hideResults();
+  mappingConfirmed = false;
+  document.getElementById('ahtPanel').style.display = 'none';
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb   = XLSX.read(e.target.result, { type: 'array' });
+      const ws   = wb.Sheets[wb.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      if (!data.length) { showError('Excel dosyası boş.'); return; }
+
+      rawData   = data;
+      excelCols = Object.keys(data[0]);
+
+      updateUploadCard(f.name);
+      renderMappingPanel();
+
+    } catch { showError('Dosya okunamadı.'); }
+  };
+  reader.readAsArrayBuffer(f);
+}
+
+function updateUploadCard(name) {
+  uploadCard.classList.add('loaded');
+  document.getElementById('uploadIcon').textContent = '✅';
+  document.getElementById('uploadTitle').textContent = name;
+  document.getElementById('uploadTitle').style.cssText = '';
+  document.getElementById('uploadSub').textContent = 'değiştirmek için tıkla';
+  const chips = document.getElementById('infoChips');
+  chips.style.display = 'flex';
+  chips.innerHTML = `
+    <div class="info-chip">Toplam <strong>${rawData.length}</strong> satır</div>
+    <div class="info-chip">${excelCols.length} <strong>kolon</strong></div>
+  `;
+  chips.addEventListener('click', e => e.stopPropagation());
+}
+
+// ── Mode toggle ──────────────────────────────────────────────────
+function setMode(m) {
+  mode = m;
+  document.getElementById('btnPer').classList.toggle('active', m === 'per');
+  document.getElementById('btnTotal').classList.toggle('active', m === 'total');
+  document.getElementById('btnAgent').classList.toggle('active', m === 'agent');
+  document.getElementById('totalField').style.display = m === 'total' ? 'block' : 'none';
+  document.getElementById('perTotalContent').style.display = m === 'agent' ? 'none' : 'block';
+  document.getElementById('agentContent').style.display = m === 'agent' ? 'block' : 'none';
+  document.getElementById('thirdColLbl').textContent = m === 'per' ? 'Adet' : '% Oran';
+
+  if (m === 'agent') {
+    renderAgentRanges();
+  } else {
+    renderRanges();
+  }
+}
+
+// ── Ranges (per / total modes) ──────────────────────────────────
+function renderRanges() {
+  const container = document.getElementById('rangesContainer');
+  container.innerHTML = '';
+  ranges.forEach(r => {
+    const avail = availCount(r);
+    const over  = mode === 'per' && avail !== null && Number(r.count) > avail;
+
+    const wrap = document.createElement('div');
+    wrap.id = 'wrap-' + r.id;
+
+    const row = document.createElement('div');
+    row.className = 'range-row';
+
+    const minIn = document.createElement('input');
+    minIn.type = 'number'; minIn.id = 'rmin-' + r.id;
+    minIn.value = r.min; minIn.placeholder = '0';
+    minIn.oninput = e => { r.min = e.target.value; updateBadge(r); };
+    minIn.onblur  = () => renderRanges();
+
+    const maxIn = document.createElement('input');
+    maxIn.type = 'number'; maxIn.id = 'rmax-' + r.id;
+    maxIn.value = r.max; maxIn.placeholder = '60';
+    maxIn.oninput = e => { r.max = e.target.value; updateBadge(r); };
+    maxIn.onblur  = () => renderRanges();
+
+    let thirdIn;
+    if (mode === 'per') {
+      thirdIn = document.createElement('input');
+      thirdIn.type = 'number'; thirdIn.min = '1';
+      thirdIn.id = 'rcnt-' + r.id;
+      thirdIn.value = r.count; thirdIn.placeholder = 'adet';
+      if (r.count) thirdIn.classList.add('filled');
+      if (over) thirdIn.style.borderColor = 'var(--danger)';
+      thirdIn.oninput = e => { r.count = e.target.value; updateBadge(r); };
+      thirdIn.onblur  = () => renderRanges();
+    } else {
+      thirdIn = document.createElement('input');
+      thirdIn.type = 'number'; thirdIn.min = '0'; thirdIn.max = '100';
+      thirdIn.id = 'rpct-' + r.id;
+      thirdIn.value = r.pct; thirdIn.placeholder = '%';
+      if (r.pct) thirdIn.classList.add('filled');
+      thirdIn.oninput = e => { r.pct = e.target.value; updatePctTotal(); };
+      thirdIn.onblur  = () => renderRanges();
+    }
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'btn-icon'; delBtn.textContent = '✕';
+    delBtn.onclick = () => { ranges = ranges.filter(x => x.id !== r.id); renderRanges(); };
+
+    row.append(minIn, maxIn, thirdIn, delBtn);
+    wrap.appendChild(row);
+
+    const badge = document.createElement('div');
+    badge.id = 'badge-' + r.id;
+    if (mode === 'per' && avail !== null) {
+      badge.className = 'avail-badge ' + (avail === 0 ? 'avail-warn' : 'avail-ok');
+      badge.textContent = avail === 0 ? '⚠ Bu aralıkta çağrı yok' : '✓ Havuzda ' + avail + ' çağrı';
+    }
+    wrap.appendChild(badge);
+    container.appendChild(wrap);
+  });
+
+  // Toplam % göstergesi
+  let pctRow = document.getElementById('pctTotalRow');
+  if (mode === 'total') {
+    if (!pctRow) {
+      pctRow = document.createElement('div');
+      pctRow.id = 'pctTotalRow';
+      pctRow.style.cssText = 'font-size:11px; text-align:right; padding-right:52px; margin-top:6px; margin-bottom:4px;';
+      container.after(pctRow);
+    }
+    updatePctTotal();
+  } else {
+    if (pctRow) pctRow.remove();
+  }
+}
+
+function updatePctTotal() {
+  const total = ranges.reduce((s, r) => s + (Number(r.pct) || 0), 0);
+  const el = document.getElementById('pctTotalRow');
+  if (!el) return;
+  const diff = Math.round((total - 100) * 10) / 10;
+  if (total === 0) {
+    el.style.color = 'var(--muted)';
+    el.textContent = 'Toplam: — %';
+  } else if (total === 100) {
+    el.style.color = 'var(--success)';
+    el.textContent = '✓ Toplam: 100%';
+  } else if (total < 100) {
+    el.style.color = 'var(--accent)';
+    el.textContent = `Toplam: ${total}% — ${100 - total}% eksik`;
+  } else {
+    el.style.color = 'var(--danger)';
+    el.textContent = `Toplam: ${total}% — ${diff}% fazla`;
+  }
+}
+
+function updateBadge(r) {
+  const badge = document.getElementById('badge-' + r.id);
+  if (!badge || mode !== 'per') return;
+  const avail = availCount(r);
+  const over  = avail !== null && Number(r.count) > avail;
+  const cntEl = document.getElementById('rcnt-' + r.id);
+  if (cntEl) {
+    cntEl.classList.toggle('filled', !!r.count);
+    cntEl.style.borderColor = over ? 'var(--danger)' : '';
+  }
+  if (avail === null) { badge.textContent = ''; badge.className = 'avail-badge'; return; }
+  badge.className = 'avail-badge ' + (avail === 0 ? 'avail-warn' : 'avail-ok');
+  badge.textContent = avail === 0 ? '⚠ Bu aralıkta çağrı yok' : '✓ Havuzda ' + avail + ' çağrı';
+}
+
+function addRange() {
+  const last = ranges[ranges.length - 1];
+  const newMin = last ? Number(last.max) : 0;
+  ranges.push({ id: nextId++, min: newMin, max: newMin + 30, count: '', pct: '' });
+  renderRanges();
+}
+
+// ── Agent Ranges (agent mode) ───────────────────────────────────
+function renderAgentRanges() {
+  const container = document.getElementById('agentRangesContainer');
+  if (!container) return;
+  container.innerHTML = '';
+
+  agentRanges.forEach(r => {
+    const wrap = document.createElement('div');
+    wrap.id = 'awrap-' + r.id;
+
+    const row = document.createElement('div');
+    row.className = 'range-row';
+    row.style.gridTemplateColumns = '1fr 1fr 1fr 40px';
+
+    const minIn = document.createElement('input');
+    minIn.type = 'number'; minIn.value = r.min; minIn.placeholder = '0';
+    minIn.oninput = e => { r.min = e.target.value; updateAgentBadge(r); };
+    minIn.onblur = () => renderAgentRanges();
+
+    const maxIn = document.createElement('input');
+    maxIn.type = 'number'; maxIn.value = r.max; maxIn.placeholder = '60';
+    maxIn.oninput = e => { r.max = e.target.value; updateAgentBadge(r); };
+    maxIn.onblur = () => renderAgentRanges();
+
+    const cntIn = document.createElement('input');
+    cntIn.type = 'number'; cntIn.min = '1'; cntIn.value = r.count; cntIn.placeholder = 'adet';
+    if (r.count) cntIn.classList.add('filled');
+    cntIn.oninput = e => { r.count = e.target.value; };
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'btn-icon'; delBtn.textContent = '✕';
+    delBtn.onclick = () => {
+      agentRanges = agentRanges.filter(x => x.id !== r.id);
+      if (agentRanges.length === 0) addAgentRange();
+      else renderAgentRanges();
+    };
+
+    row.append(minIn, maxIn, cntIn, delBtn);
+    wrap.appendChild(row);
+
+    const badge = document.createElement('div');
+    badge.id = 'abadge-' + r.id;
+    badge.className = 'avail-badge';
+    updateAgentBadgeEl(badge, r);
+    wrap.appendChild(badge);
+
+    container.appendChild(wrap);
+  });
+
+  updateAgentInfo();
+}
+
+function updateAgentBadgeEl(badge, r) {
+  if (!validRows.length || r.min === '' || r.max === '' || Number(r.min) >= Number(r.max)) {
+    badge.textContent = '';
+    return;
+  }
+  const filtered = validRows.filter(row => {
+    const v = Number(row.__dur);
+    return v >= Number(r.min) && v < Number(r.max);
+  });
+  const agents = [...new Set(filtered.map(row => row.__agent))].filter(Boolean);
+  if (filtered.length === 0) {
+    badge.className = 'avail-badge avail-warn';
+    badge.textContent = '⚠ Bu aralıkta çağrı yok';
+  } else {
+    badge.className = 'avail-badge avail-ok';
+    badge.textContent = `✓ ${filtered.length} çağrı, ${agents.length} temsilci`;
+  }
+}
+
+function updateAgentBadge(r) {
+  const badge = document.getElementById('abadge-' + r.id);
+  if (badge) updateAgentBadgeEl(badge, r);
+}
+
+function updateAgentInfo() {
+  const infoEl = document.getElementById('agentInfo');
+  if (!infoEl) return;
+  if (!validRows.length) {
+    infoEl.innerHTML = '<span style="color:var(--muted)">Dosya yüklendiğinde temsilci bilgisi görünecek</span>';
+    return;
+  }
+  const agents = [...new Set(validRows.map(row => row.__agent))].filter(Boolean);
+  infoEl.innerHTML = `<span style="color:var(--success)">👤 Dosyada toplam <strong>${agents.length}</strong> farklı temsilci bulundu</span>`;
+}
+
+function addAgentRange() {
+  const last = agentRanges[agentRanges.length - 1];
+  const newMin = last ? Number(last.max) : 0;
+  agentRanges.push({ id: ++agentNextId, min: newMin, max: newMin + 30, count: 2 });
+  renderAgentRanges();
+}
+
+// ── Sampling ─────────────────────────────────────────────────────
+function runSampling() {
+  showError('');
+  if (!validRows.length) { showError('Önce bir Excel dosyası yükleyin.'); return; }
+
+  if (mode === 'agent') {
+    runAgentSampling();
+    return;
+  }
+
+  const vr = ranges.filter(r => r.min !== '' && r.max !== '' && Number(r.min) < Number(r.max));
+  if (!vr.length) { showError('En az bir geçerli aralık tanımlayın.'); return; }
+
+  const buckets = vr.map(r => ({
+    ...r,
+    items: validRows.filter(row => {
+      const v = Number(row.__dur);
+      return v >= Number(r.min) && v < Number(r.max);
+    })
+  }));
+
+  let selected = [];
+  if (mode === 'per') {
+    for (const b of buckets) {
+      const n = Number(b.count);
+      if (!n || n <= 0) continue;
+      sample(b.items, n).forEach(row => selected.push({ ...row, __range: b.min+'-'+b.max+'sn' }));
+    }
+    if (!selected.length) { showError('Aralıklara adet girilmedi veya eşleşen çağrı yok.'); return; }
+  } else {
+    const total = Number(document.getElementById('totalCount').value);
+    if (!total || total <= 0) { showError('Geçerli bir toplam sayı girin.'); return; }
+
+    const pctSum = buckets.reduce((s, b) => s + (Number(b.pct) || 0), 0);
+    const hasPct = buckets.some(b => Number(b.pct) > 0);
+
+    if (hasPct && Math.abs(pctSum - 100) > 0.01) {
+      showError(`Yüzdelerin toplamı 100 olmalı. Şu an: ${pctSum}%`); return;
+    }
+
+    const totalAvail = buckets.reduce((s, b) => s + b.items.length, 0);
+    if (!totalAvail) { showError('Aralıklarda çağrı bulunamadı.'); return; }
+
+    for (const b of buckets) {
+      let quota;
+      if (hasPct) {
+        quota = Math.round((Number(b.pct) / 100) * total);
+      } else {
+        quota = Math.round((b.items.length / totalAvail) * total);
+      }
+      if (!quota) continue;
+      if (quota > b.items.length) {
+        showError(`"${b.min}-${b.max}sn" aralığında yeterli çağrı yok. İstenen: ${quota}, Mevcut: ${b.items.length}`);
+        return;
+      }
+      sample(b.items, quota).forEach(row => selected.push({ ...row, __range: b.min+'-'+b.max+'sn' }));
+    }
+    if (!selected.length) { showError('Yeterli çağrı bulunamadı.'); return; }
+  }
+
+  results = selected;
+  renderResults();
+}
+
+function runAgentSampling() {
+  const vr = agentRanges.filter(r => r.min !== '' && r.max !== '' && Number(r.min) < Number(r.max) && Number(r.count) > 0);
+  if (!vr.length) { showError('En az bir geçerli satır tanımlayın (Min < Max ve Adet > 0).'); return; }
+
+  let selected = [];
+  let warnings = [];
+
+  for (const r of vr) {
+    const minV = Number(r.min);
+    const maxV = Number(r.max);
+    const need = Number(r.count);
+    const rangeLabel = minV + '-' + maxV + 'sn';
+
+    const filtered = validRows.filter(row => {
+      const v = Number(row.__dur);
+      return v >= minV && v < maxV;
+    });
+
+    // Group by agent
+    const agentMap = {};
+    filtered.forEach(row => {
+      const agent = row.__agent;
+      if (!agent) return;
+      if (!agentMap[agent]) agentMap[agent] = [];
+      agentMap[agent].push(row);
+    });
+
+    const agents = Object.keys(agentMap);
+    if (!agents.length) {
+      showError(`"${rangeLabel}" aralığında temsilci bulunamadı.`);
+      return;
+    }
+
+    for (const agent of agents) {
+      const pool = agentMap[agent];
+      const picked = sample(pool, need);
+      picked.forEach(row => selected.push({ ...row, __range: rangeLabel }));
+      if (picked.length < need) {
+        warnings.push(`${agent} (${picked.length}/${need} — ${rangeLabel})`);
+      }
+    }
+  }
+
+  if (!selected.length) { showError('Eşleşen çağrı bulunamadı.'); return; }
+
+  if (warnings.length) {
+    showError(`Bazı temsilcilerin yeterli çağrısı yok: ${warnings.join(', ')}`);
+  }
+
+  results = selected;
+  renderResults();
+}
+
+function renderResults() {
+  document.getElementById('pageHint').style.display = 'none';
+  const wrapper = document.getElementById('resultsWrapper');
+  wrapper.style.display = 'block';
+
+  if (mode === 'agent') {
+    const agents = [...new Set(results.map(r => r.__agent))];
+    const activeRangeCount = agentRanges.filter(r => r.min !== '' && r.max !== '' && Number(r.min) < Number(r.max)).length;
+    document.getElementById('statsBar').innerHTML = `
+      <div class="stat"><div class="val accent">${results.length}</div><div class="lbl">Seçilen Çağrı</div></div>
+      <div class="stat"><div class="val">${agents.length}</div><div class="lbl">Temsilci Sayısı</div></div>
+      <div class="stat"><div class="val">${activeRangeCount}</div><div class="lbl">Aktif Aralık</div></div>
+    `;
+  } else {
+    const activeRangeCount = ranges.filter(r => r.min !== '' && r.max !== '' && Number(r.min) < Number(r.max)).length;
+    document.getElementById('statsBar').innerHTML = `
+      <div class="stat"><div class="val accent">${results.length}</div><div class="lbl">Seçilen Çağrı</div></div>
+      <div class="stat"><div class="val">${validRows.length}</div><div class="lbl">Geçerli Kayıt</div></div>
+      <div class="stat"><div class="val">${activeRangeCount}</div><div class="lbl">Aktif Aralık</div></div>
+    `;
+  }
+
+  const tbody = document.getElementById('resultsBody');
+  tbody.innerHTML = '';
+  results.forEach((row, i) => {
+    const tr = document.createElement('tr');
+    const callDate = row.__date instanceof Date
+      ? row.__date.toLocaleString('tr-TR')
+      : fmt(row.__date);
+
+    let html = `
+      <td style="color:var(--muted)">${i+1}</td>
+      <td><span class="range-tag">${row.__range}</span></td>
+      <td class="id-cell" title="${fmt(row.__id)}">${fmt(row.__id)}</td>
+      <td>${fmt(row.__agent)}</td>`;
+    if (colMap.queue_name) html += `<td>${fmt(row.__queue)}</td>`;
+    if (colMap.call_date) html += `<td>${callDate}</td>`;
+    html += `<td style="color:var(--accent);font-weight:600">${fmt(row.__dur)}</td>`;
+
+    tr.innerHTML = html;
+    tbody.appendChild(tr);
+  });
+}
+
+function hideResults() {
+  document.getElementById('resultsWrapper').style.display = 'none';
+  document.getElementById('pageHint').style.display = 'block';
+}
+
+// ── Download ─────────────────────────────────────────────────────
+function downloadExcel() {
+  if (!results.length) return;
+
+  // Build download columns dynamically based on mapping
+  const out = results.map(({ __range, __raw, __id, __dur, __agent, __queue, __date, __email, ...rest }) => {
+    const row = { AHT_Araligi: __range };
+    if (colMap.call_id)     row[colMap.call_id] = __id;
+    if (colMap.agent_name)  row[colMap.agent_name] = __agent;
+    if (colMap.agent_email) row[colMap.agent_email] = __email;
+    if (colMap.queue_name)  row[colMap.queue_name] = __queue;
+    if (colMap.call_date)   row[colMap.call_date] = __date;
+    if (colMap.duration)    row[colMap.duration] = __dur;
+    return row;
+  });
+
+  const ws = XLSX.utils.json_to_sheet(out);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Secilen_Cagrilar');
+  XLSX.writeFile(wb, 'secim_' + new Date().toISOString().slice(0,10) + '.xlsx');
+}
+
+// ── Init ─────────────────────────────────────────────────────────
+renderRanges();
+</script>
+</body>
+</html>
